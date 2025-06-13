@@ -57,7 +57,7 @@ if url:
     else:
         shorturl=-1
 
-    Symbol=1 if "@" in url else Symbol=-1
+    Symbol=1 if "@" in url else -1
 
     if url.count("//") > 1:
         redirecting=1
