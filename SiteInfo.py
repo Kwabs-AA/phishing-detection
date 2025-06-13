@@ -57,10 +57,7 @@ if url:
     else:
         shorturl=-1
 
-    if "@" in url:
-        Symbol=1
-    else:
-        Symbol=-1
+    Symbol=1 if "@" in url else Symbol=-1
 
     if url.count("//") > 1:
         redirecting=1
@@ -179,7 +176,7 @@ if url:
         domain_expiration_date=domain_info.expiration_date
 
     try:
-        domain_expiry_year=domain_expiration_date.year - domain_expiration_date.year
+        domain_expiry_year = (domain_expiration_date - datetime.now()).days // 365
     except:
         domain_expiry_year=0
 
@@ -189,22 +186,17 @@ if url:
         domain_reg_len=-1
     
     
-    iframe_value=soup.find("iframe")
-    if iframe_value:
-        iframe=-1
-    else:
-        iframe=1
-
+    iframe_value = soup.find("iframe")
+    iframe = -1 if iframe_value else 1
 
     #Abnormal Url
     host_name=domain_info.name_server
     host_name=urlparse(url).netloc.split('.')
-    for name in host_name:
-        for value in domain:
-            if name.lower() in value.lower():
-                AbnormalURL = -1
-            else:
-                AbnormalURL = 1
+    AbnormalURL = 1
+    for name in domain_info.name_server or []:
+        if any(part.lower() in name.lower() for part in domain):
+            AbnormalURL = -1
+            break
     
     #website forwarding
     website_response = requests.get(url, allow_redirects=True, timeout=10,verify=False)
@@ -219,16 +211,10 @@ if url:
 
 
     #Statusbar
-    mouseover_tags=soup.find_all(onmouseover=True)
-    if not mouseover_tags:
-        StatusBarCust=1
-    for tags in mouseover_tags:
-        onmouseover_code = tags['onmouseover'].lower()
-        if 'window.status' in onmouseover_code or 'status' in onmouseover_code:
-            StatusBarCust=-1
-        else:
-            StatusBarCust=1
-
+    if re.search(r'window\.status\s*=|status\s*=', html_content.lower()):
+        StatusBarCust = -1  # suspicious
+    else:
+        StatusBarCust = 1  # no cus
 
 
     #mailTo
@@ -243,21 +229,11 @@ if url:
 
 
     #Disabled right click
-    driver = webdriver.Chrome()
-    driver.get(url)
-    actions = ActionChains(driver)
-
-    try:
-        actions.context_click(driver.find_element(By.TAG_NAME, 'body')).perform()
-        # Try to switch to an alert (if right-click triggers one)
-        alert = driver.switch_to.alert
-        _ = alert.text  # Attempt to read the alert to trigger exception if not present
-        is_disabled = 1
-    except NoAlertPresentException:
+    html = requests.get(url, verify=False, timeout=10).text
+    if re.search(r"event.button\s*==\s*2", html) or "contextmenu" in html.lower():
+        is_disabled = 1  # right-click disabled
+    else:
         is_disabled = -1
-    finally:
-        driver.quit()
-
     
     
     #serverFormHandler
@@ -271,7 +247,7 @@ if url:
         elif action_domain == urlparse(url).netloc:
             ServerFormHandler=0
         else:
-            FormHandler=1
+            ServerFormHandler=1
     
     if not forms:
         ServerFormHandler=1
@@ -312,6 +288,7 @@ if url:
             if not urlparse(href).netloc==urlparse(url).netloc or href.lower() in dummy_link:
                 anchor_link+=1
 
+    if total_links>0:
         anchor_percentage= (anchor_link/total_links)*100
 
         if anchor_percentage <=31:
@@ -360,33 +337,11 @@ if url:
     else:
         LinkInScriptTags=1
 
-    driver = None
-    UsingPopupWindow = -1
-
-    try:
-        # Use webdriver-manager to automatically handle ChromeDriver
-        options = ChromeOptions()
-        options.add_argument("--headless")
-        
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        
-        # Rest of your code...
-        driver.get(url)
-        time.sleep(5)
-        
-        main_window = driver.current_window_handle
-        all_windows = driver.window_handles
-        
-        if len(all_windows) > 1:
-            UsingPopupWindow = 1
-            
-    except Exception as e:
-        print(f"WebDriver error: {e}")
-        UsingPopupWindow = 0
-    finally:
-        if driver:
-            driver.quit()
+    #usingPopup
+    if re.search(r'window\.open\s*\(', html):
+        UsingPopupWindow = 1  # pop-up behavior detected
+    else:
+        UsingPopupWindow = -1
 
     #Page Rank
     domcomp_rank = f"https://openpagerank.com/api/v1.0/getPageRank?domains[]={url_domain}"
